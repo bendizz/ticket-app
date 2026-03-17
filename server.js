@@ -187,7 +187,6 @@ app.post('/api/delete-account', requireAuth, async (req, res) => {
             return res.status(400).json({ error: 'Неверный пароль' });
         }
 
-        /* удаляем файлы заявок пользователя с диска */
         const files = await pool.query(
             `SELECT a.file_path FROM attachments a
              JOIN requests r ON a.request_id = r.id
@@ -202,7 +201,6 @@ app.post('/api/delete-account', requireAuth, async (req, res) => {
             }
         }
 
-        /* удаляем пользователя (каскадно удалятся все заявки, комментарии и тд) */
         await pool.query('DELETE FROM users WHERE id = $1', [req.session.userId]);
 
         req.session.destroy();
