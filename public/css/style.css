@@ -864,14 +864,6 @@ body {
     padding: 10px 24px;
 }
 
-.card-danger {
-    border-color: #D9534F;
-}
-
-.card-danger h3 {
-    color: #D9534F;
-}
-
 .danger-text {
     color: #666;
     font-size: 14px;
