@@ -553,7 +553,6 @@ app.get('/api/unread-counts', requireAuth, async (req, res) => {
     }
 });
 
-/* запуск сервера */
 server.listen(PORT, () => {
     console.log(`Сервер запущен: http://localhost:${PORT}`);
 });
