@@ -12,7 +12,6 @@ const server = http.createServer(app);
 const io = new Server(server);
 const PORT = 3000;
 
-/* подключение к бд */
 const pool = new Pool({
     user: 'postgres',
     host: 'localhost',
@@ -21,13 +20,11 @@ const pool = new Pool({
     port: 5432
 });
 
-/* создание папки uploads если её нет */
 const uploadsDir = path.join(__dirname, 'uploads');
 if (!fs.existsSync(uploadsDir)) {
     fs.mkdirSync(uploadsDir);
 }
 
-/* настройка multer для загрузки файлов */
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
         cb(null, uploadsDir);
@@ -49,17 +46,14 @@ app.use(session({
     cookie: { maxAge: 24 * 60 * 60 * 1000 }
 }));
 
-/* проверка авторизации */
 function requireAuth(req, res, next) {
     if (req.session && req.session.userId) return next();
     res.status(401).json({ error: 'Не авторизован' });
 }
 
-/* хранение связи userId -> socketId */
 const userSockets = {};
 
 io.on('connection', (socket) => {
-    /* клиент регистрирует свой userId */
     socket.on('register', (userId) => {
         userSockets[userId] = socket.id;
     });
@@ -74,7 +68,6 @@ io.on('connection', (socket) => {
     });
 });
 
-/* корневой маршрут */
 app.get('/', (req, res) => {
     if (req.session && req.session.userId) {
         res.redirect('/dashboard.html');
@@ -83,7 +76,6 @@ app.get('/', (req, res) => {
     }
 });
 
-/* регистрация */
 app.post('/api/register', async (req, res) => {
     try {
         const { username, password } = req.body;
@@ -109,7 +101,6 @@ app.post('/api/register', async (req, res) => {
     }
 });
 
-/* вход */
 app.post('/api/login', async (req, res) => {
     try {
         const { username, password } = req.body;
@@ -131,13 +122,11 @@ app.post('/api/login', async (req, res) => {
     }
 });
 
-/* выход */
 app.post('/api/logout', (req, res) => {
     req.session.destroy();
     res.json({ success: true });
 });
 
-/* данные текущего пользователя */
 app.get('/api/me', requireAuth, async (req, res) => {
     try {
         const result = await pool.query(
@@ -152,7 +141,78 @@ app.get('/api/me', requireAuth, async (req, res) => {
     }
 });
 
-/* список пользователей для выпадающего списка */
+app.post('/api/change-password', requireAuth, async (req, res) => {
+    try {
+        const { old_password, new_password } = req.body;
+
+        if (!old_password || !new_password) {
+            return res.status(400).json({ error: 'Заполните все поля' });
+        }
+
+        const user = await pool.query(
+            'SELECT password FROM users WHERE id = $1',
+            [req.session.userId]
+        );
+
+        if (user.rows[0].password !== old_password) {
+            return res.status(400).json({ error: 'Неверный старый пароль' });
+        }
+
+        await pool.query(
+            'UPDATE users SET password = $1 WHERE id = $2',
+            [new_password, req.session.userId]
+        );
+
+        res.json({ success: true });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Ошибка сервера' });
+    }
+});
+
+app.post('/api/delete-account', requireAuth, async (req, res) => {
+    try {
+        const { password } = req.body;
+
+        if (!password) {
+            return res.status(400).json({ error: 'Введите пароль' });
+        }
+
+        const user = await pool.query(
+            'SELECT password FROM users WHERE id = $1',
+            [req.session.userId]
+        );
+
+        if (user.rows[0].password !== password) {
+            return res.status(400).json({ error: 'Неверный пароль' });
+        }
+
+        /* удаляем файлы заявок пользователя с диска */
+        const files = await pool.query(
+            `SELECT a.file_path FROM attachments a
+             JOIN requests r ON a.request_id = r.id
+             WHERE r.creator_id = $1`,
+            [req.session.userId]
+        );
+
+        for (const file of files.rows) {
+            const filePath = path.join(uploadsDir, file.file_path);
+            if (fs.existsSync(filePath)) {
+                fs.unlinkSync(filePath);
+            }
+        }
+
+        /* удаляем пользователя (каскадно удалятся все заявки, комментарии и тд) */
+        await pool.query('DELETE FROM users WHERE id = $1', [req.session.userId]);
+
+        req.session.destroy();
+        res.json({ success: true });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Ошибка сервера' });
+    }
+});
+
 app.get('/api/users', requireAuth, async (req, res) => {
     try {
         const result = await pool.query(
@@ -166,7 +226,6 @@ app.get('/api/users', requireAuth, async (req, res) => {
     }
 });
 
-/* статистика заявок */
 app.get('/api/stats', requireAuth, async (req, res) => {
     try {
         const created = await pool.query(`
@@ -197,7 +256,6 @@ app.get('/api/stats', requireAuth, async (req, res) => {
     }
 });
 
-/* создание заявки с файлами */
 app.post('/api/requests', requireAuth, upload.array('files', 10), async (req, res) => {
     try {
         const { title, description, deadline_type, deadline_value, assignee_id } = req.body;
@@ -233,7 +291,6 @@ app.post('/api/requests', requireAuth, upload.array('files', 10), async (req, re
     }
 });
 
-/* получить созданные мной заявки */
 app.get('/api/requests/created', requireAuth, async (req, res) => {
     try {
         const { filter, search } = req.query;
@@ -266,7 +323,6 @@ app.get('/api/requests/created', requireAuth, async (req, res) => {
     }
 });
 
-/* получить назначенные мне заявки */
 app.get('/api/requests/assigned', requireAuth, async (req, res) => {
     try {
         const { filter, search } = req.query;
@@ -299,7 +355,6 @@ app.get('/api/requests/assigned', requireAuth, async (req, res) => {
     }
 });
 
-/* удалить заявку */
 app.delete('/api/requests/:id', requireAuth, async (req, res) => {
     try {
         const files = await pool.query(
@@ -328,7 +383,6 @@ app.delete('/api/requests/:id', requireAuth, async (req, res) => {
     }
 });
 
-/* закрыть заявку */
 app.patch('/api/requests/:id/close', requireAuth, async (req, res) => {
     try {
         const check = await pool.query(
@@ -348,7 +402,6 @@ app.patch('/api/requests/:id/close', requireAuth, async (req, res) => {
     }
 });
 
-/* получить файлы заявки */
 app.get('/api/attachments/:requestId', requireAuth, async (req, res) => {
     try {
         const access = await pool.query(
@@ -370,7 +423,6 @@ app.get('/api/attachments/:requestId', requireAuth, async (req, res) => {
     }
 });
 
-/* скачать файл */
 app.get('/api/download/:id', requireAuth, async (req, res) => {
     try {
         const file = await pool.query(
@@ -403,7 +455,6 @@ app.get('/api/download/:id', requireAuth, async (req, res) => {
     }
 });
 
-/* получить комментарии заявки */
 app.get('/api/comments/:requestId', requireAuth, async (req, res) => {
     try {
         const access = await pool.query(
@@ -429,7 +480,6 @@ app.get('/api/comments/:requestId', requireAuth, async (req, res) => {
     }
 });
 
-/* отправить комментарий */
 app.post('/api/comments', requireAuth, async (req, res) => {
     try {
         const { request_id, text } = req.body;
@@ -451,7 +501,6 @@ app.post('/api/comments', requireAuth, async (req, res) => {
             [request_id, req.session.userId, text.trim()]
         );
 
-        /* отправляем уведомление собеседнику через websocket */
         const r = access.rows[0];
         const recipientId = r.creator_id === req.session.userId ? r.assignee_id : r.creator_id;
 
@@ -468,7 +517,6 @@ app.post('/api/comments', requireAuth, async (req, res) => {
     }
 });
 
-/* отметить сообщения как прочитанные */
 app.post('/api/comments/read', requireAuth, async (req, res) => {
     try {
         const { request_id } = req.body;
@@ -486,7 +534,6 @@ app.post('/api/comments/read', requireAuth, async (req, res) => {
     }
 });
 
-/* получить количество непрочитанных сообщений по заявкам */
 app.get('/api/unread-counts', requireAuth, async (req, res) => {
     try {
         const result = await pool.query(`

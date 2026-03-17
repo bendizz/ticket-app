@@ -8,7 +8,6 @@
 </head>
 <body class="dashboard-body">
 
-    <!-- боковая панель -->
     <nav class="sidebar" id="sidebar">
         <div class="sidebar-btn active" id="butt1" data-page="page-profile">
             <span class="btn-icon">👤</span>
@@ -32,10 +31,8 @@
         </div>
     </nav>
 
-    <!-- основной контент -->
     <main class="content">
 
-        <!-- личный кабинет -->
         <section class="page active" id="page-profile">
             <h2 class="page-title">Личный кабинет</h2>
 
@@ -49,6 +46,7 @@
                     <span class="info-label">Пароль:</span>
                     <span class="info-value" id="profile-password"></span>
                     <button class="btn-toggle-pwd" id="toggle-password" title="Показать / скрыть">👁</button>
+                    <button class="btn-change-pwd" id="btn-open-change-pwd">Сменить пароль</button>
                 </div>
             </div>
 
@@ -83,9 +81,14 @@
                     </div>
                 </div>
             </div>
+
+            <div class="card card-danger">
+                <h3>Опасная зона</h3>
+                <p class="danger-text">Удаление аккаунта приведёт к потере всех данных, заявок и файлов.</p>
+                <button class="btn-red" id="btn-open-delete-account">Удалить аккаунт</button>
+            </div>
         </section>
 
-        <!-- создание заявок -->
         <section class="page" id="page-create">
             <h2 class="page-title">Создание заявок</h2>
 
@@ -104,7 +107,6 @@
             </div>
         </section>
 
-        <!-- обработка заявок -->
         <section class="page" id="page-process">
             <h2 class="page-title">Обработка заявок</h2>
 
@@ -123,7 +125,6 @@
         </section>
     </main>
 
-    <!-- модалка создания заявки -->
     <div class="modal-overlay" id="modal-create">
         <div class="modal">
             <div class="modal-header">
@@ -165,7 +166,6 @@
         </div>
     </div>
 
-    <!-- модалка просмотра заявки -->
     <div class="modal-overlay" id="modal-view">
         <div class="modal">
             <div class="modal-header">
@@ -177,7 +177,6 @@
         </div>
     </div>
 
-    <!-- модалка чата -->
     <div class="modal-overlay" id="modal-chat">
         <div class="modal modal-chat">
             <div class="modal-header">
@@ -191,6 +190,53 @@
             <div class="chat-input-area">
                 <input type="text" class="chat-input" id="chat-input" placeholder="Введите сообщение...">
                 <button class="btn-brown btn-send" id="btn-send-message">Отправить</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="modal-change-pwd">
+        <div class="modal">
+            <div class="modal-header">
+                <h3>Смена пароля</h3>
+                <span class="modal-close" data-modal="modal-change-pwd">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Старый пароль</label>
+                    <input type="password" id="pwd-old" placeholder="Введите старый пароль">
+                </div>
+                <div class="form-group">
+                    <label>Новый пароль</label>
+                    <input type="password" id="pwd-new" placeholder="Введите новый пароль">
+                </div>
+                <div class="form-group">
+                    <label>Повторите новый пароль</label>
+                    <input type="password" id="pwd-confirm" placeholder="Повторите новый пароль">
+                </div>
+                <div id="pwd-error" class="error-message"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-brown btn-modal-action" id="btn-change-pwd">Сменить пароль</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="modal-delete-account">
+        <div class="modal">
+            <div class="modal-header">
+                <h3>Удаление аккаунта</h3>
+                <span class="modal-close" data-modal="modal-delete-account">&times;</span>
+            </div>
+            <div class="modal-body">
+                <p class="danger-text" style="margin-bottom: 20px;">Это действие необратимо. Все ваши данные будут удалены.</p>
+                <div class="form-group">
+                    <label>Введите пароль для подтверждения</label>
+                    <input type="password" id="delete-pwd" placeholder="Введите пароль">
+                </div>
+                <div id="delete-error" class="error-message"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-red" id="btn-delete-account">Удалить аккаунт</button>
             </div>
         </div>
     </div>

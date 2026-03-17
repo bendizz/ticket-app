@@ -840,3 +840,41 @@ body {
     width: auto;
     padding: 10px 20px;
 }
+
+.btn-change-pwd {
+    background: #6B3A2A;
+    color: #FFF8F0;
+    border: none;
+    border-radius: 6px;
+    padding: 4px 12px;
+    margin-left: 12px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+    transition: background 0.2s;
+}
+
+.btn-change-pwd:hover {
+    background: #7D4E3B;
+}
+
+/* кнопка в модалке */
+.btn-modal-action {
+    width: auto;
+    padding: 10px 24px;
+}
+
+.card-danger {
+    border-color: #D9534F;
+}
+
+.card-danger h3 {
+    color: #D9534F;
+}
+
+.danger-text {
+    color: #666;
+    font-size: 14px;
+    margin-bottom: 16px;
+    line-height: 1.5;
+}

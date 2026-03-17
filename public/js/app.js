@@ -9,7 +9,6 @@ document.addEventListener('DOMContentLoaded', () => {
     let unreadCounts = {};
     const socket = io();
 
-    /* проверка авторизации */
     async function checkAuth() {
         try {
             const res = await fetch('/api/me');
@@ -29,11 +28,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     checkAuth();
 
-    /* получение уведомления о новом сообщении через websocket */
     socket.on('new-message', (data) => {
         loadUnreadCounts();
 
-        /* если чат с этой заявкой открыт - обновляем сообщения и отмечаем как прочитанные */
         const chatModal = document.getElementById('modal-chat');
         if (chatModal.classList.contains('active') && currentViewRequest && currentViewRequest.id === data.request_id) {
             loadMessages(data.request_id);
@@ -41,7 +38,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    /* загрузка количества непрочитанных сообщений */
     async function loadUnreadCounts() {
         try {
             const res = await fetch('/api/unread-counts');
@@ -56,7 +52,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    /* обновление бейджей непрочитанных на заявках */
     function updateUnreadBadges() {
         document.querySelectorAll('.request-item').forEach(item => {
             const id = parseInt(item.dataset.id);
@@ -72,7 +67,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    /* отметить как прочитанное */
     async function markAsRead(requestId) {
         try {
             await fetch('/api/comments/read', {
@@ -89,7 +83,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    /* проверка уведомлений о необработанных заявках */
     async function checkNotifications() {
         try {
             const res = await fetch('/api/requests/assigned?filter=0');
@@ -105,7 +98,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    /* навигация по боковой панели */
     const sidebarBtns = document.querySelectorAll('.sidebar-btn[data-page]');
     const pages = document.querySelectorAll('.page');
 
@@ -125,13 +117,11 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    /* кнопка выхода */
     document.getElementById('butt4').addEventListener('click', async () => {
         await fetch('/api/logout', { method: 'POST' });
         window.location.href = '/login.html';
     });
 
-    /* загрузка профиля и статистики */
     async function loadProfile() {
         if (!currentUser) return;
 
@@ -151,7 +141,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    /* показ/скрытие пароля */
     function renderPassword() {
         const el = document.getElementById('profile-password');
         el.textContent = passwordVisible
@@ -164,7 +153,86 @@ document.addEventListener('DOMContentLoaded', () => {
         renderPassword();
     });
 
-    /* заполнение выпадающего списка срока */
+    document.getElementById('btn-open-change-pwd').addEventListener('click', () => {
+        document.getElementById('pwd-old').value = '';
+        document.getElementById('pwd-new').value = '';
+        document.getElementById('pwd-confirm').value = '';
+        document.getElementById('pwd-error').textContent = '';
+        openModal('modal-change-pwd');
+    });
+
+    document.getElementById('btn-change-pwd').addEventListener('click', async () => {
+        const oldPwd = document.getElementById('pwd-old').value;
+        const newPwd = document.getElementById('pwd-new').value;
+        const confirmPwd = document.getElementById('pwd-confirm').value;
+        const errorEl = document.getElementById('pwd-error');
+        errorEl.textContent = '';
+
+        if (!oldPwd || !newPwd || !confirmPwd) {
+            errorEl.textContent = 'Заполните все поля';
+            return;
+        }
+
+        if (newPwd !== confirmPwd) {
+            errorEl.textContent = 'Новые пароли не совпадают';
+            return;
+        }
+
+        try {
+            const res = await fetch('/api/change-password', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ old_password: oldPwd, new_password: newPwd })
+            });
+            const data = await res.json();
+            if (data.success) {
+                currentUser.password = newPwd;
+                renderPassword();
+                closeModal('modal-change-pwd');
+                alert('Пароль успешно изменён');
+            } else {
+                errorEl.textContent = data.error;
+            }
+        } catch {
+            errorEl.textContent = 'Ошибка соединения с сервером';
+        }
+    });
+
+    document.getElementById('btn-open-delete-account').addEventListener('click', () => {
+        document.getElementById('delete-pwd').value = '';
+        document.getElementById('delete-error').textContent = '';
+        openModal('modal-delete-account');
+    });
+
+    document.getElementById('btn-delete-account').addEventListener('click', async () => {
+        const password = document.getElementById('delete-pwd').value;
+        const errorEl = document.getElementById('delete-error');
+        errorEl.textContent = '';
+
+        if (!password) {
+            errorEl.textContent = 'Введите пароль';
+            return;
+        }
+
+        if (!confirm('Вы уверены? Это действие необратимо!')) return;
+
+        try {
+            const res = await fetch('/api/delete-account', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ password })
+            });
+            const data = await res.json();
+            if (data.success) {
+                window.location.href = '/login.html';
+            } else {
+                errorEl.textContent = data.error;
+            }
+        } catch {
+            errorEl.textContent = 'Ошибка соединения с сервером';
+        }
+    });
+
     const deadlineType = document.getElementById('req-deadline-type');
     const deadlineValue = document.getElementById('req-deadline-value');
 
@@ -182,7 +250,6 @@ document.addEventListener('DOMContentLoaded', () => {
     deadlineType.addEventListener('change', () => fillDeadlineValues(deadlineType.value));
     fillDeadlineValues('d');
 
-    /* открытие/закрытие модалок */
     function openModal(id) {
         document.getElementById(id).classList.add('active');
     }
@@ -201,7 +268,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    /* управление выбранными файлами */
     const fileInput = document.getElementById('req-files');
     const selectedFilesDiv = document.getElementById('selected-files');
 
@@ -231,7 +297,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    /* открытие модалки создания заявки */
     document.getElementById('btn-open-create-modal').addEventListener('click', async () => {
         try {
             const res = await fetch('/api/users');
@@ -267,7 +332,6 @@ document.addEventListener('DOMContentLoaded', () => {
         openModal('modal-create');
     });
 
-    /* отправка новой заявки */
     document.getElementById('btn-submit-request').addEventListener('click', async () => {
         const title = document.getElementById('req-title').value.trim();
         const description = document.getElementById('req-description').value.trim();
@@ -306,13 +370,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    /* поиск с задержкой */
     function debounceSearch(callback) {
         clearTimeout(searchTimeout);
         searchTimeout = setTimeout(callback, 300);
     }
 
-    /* загрузка созданных заявок */
     async function loadCreatedRequests() {
         const filter = document.getElementById('filter-created').value;
         const search = document.getElementById('search-created').value;
@@ -359,7 +421,6 @@ document.addEventListener('DOMContentLoaded', () => {
         debounceSearch(loadCreatedRequests);
     });
 
-    /* загрузка назначенных заявок */
     async function loadAssignedRequests() {
         const filter = document.getElementById('filter-assigned').value;
         const search = document.getElementById('search-assigned').value;
@@ -406,7 +467,6 @@ document.addEventListener('DOMContentLoaded', () => {
         debounceSearch(loadAssignedRequests);
     });
 
-    /* получить иконку по расширению файла */
     function getFileIcon(filename) {
         const ext = filename.split('.').pop().toLowerCase();
         const icons = {
@@ -419,14 +479,12 @@ document.addEventListener('DOMContentLoaded', () => {
         return icons[ext] || '📎';
     }
 
-    /* форматирование размера файла */
     function formatFileSize(bytes) {
         if (bytes < 1024) return bytes + ' Б';
         if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' КБ';
         return (bytes / (1024 * 1024)).toFixed(1) + ' МБ';
     }
 
-    /* показ деталей заявки */
     async function showDetail(req, type) {
         currentViewRequest = req;
         currentViewType = type;
@@ -562,7 +620,6 @@ document.addEventListener('DOMContentLoaded', () => {
         openModal('modal-view');
     }
 
-    /* чат */
     async function openChat(req, type) {
         const companionName = type === 'created' ? req.assignee_name : req.creator_name;
         document.getElementById('chat-title').textContent = `Обсуждение с ${companionName}`;
@@ -604,7 +661,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    /* отправка сообщения */
     document.getElementById('btn-send-message').addEventListener('click', async () => {
         const input = document.getElementById('chat-input');
         const text = input.value.trim();
@@ -632,7 +688,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    /* отправка сообщения по enter */
     document.getElementById('chat-input').addEventListener('keydown', (e) => {
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
@@ -640,18 +695,15 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    /* кнопка назад в чате */
     document.getElementById('btn-chat-back').addEventListener('click', () => {
         closeModal('modal-chat');
         showDetail(currentViewRequest, currentViewType);
     });
 
-    /* кнопка закрыть в чате */
     document.getElementById('btn-chat-close').addEventListener('click', () => {
         closeModal('modal-chat');
     });
 
-    /* форматирование срока */
     function formatDeadline(type, value) {
         if (type === 'd') {
             const l2 = value % 100;
@@ -672,7 +724,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    /* экранирование текста */
     function esc(text) {
         if (!text) return '';
         const d = document.createElement('div');

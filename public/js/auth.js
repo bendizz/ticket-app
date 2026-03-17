@@ -1,11 +1,9 @@
 document.addEventListener('DOMContentLoaded', () => {
 
-    /* если уже авторизован - перекинуть на дашборд */
     fetch('/api/me').then(res => {
         if (res.ok) window.location.href = '/dashboard.html';
     });
 
-    /* вход */
     const loginForm = document.getElementById('login-form');
     if (loginForm) {
         loginForm.addEventListener('submit', async (e) => {
@@ -33,7 +31,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    /* регистрация */
     const registerForm = document.getElementById('register-form');
     if (registerForm) {
         registerForm.addEventListener('submit', async (e) => {
