@@ -5,6 +5,9 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentViewRequest = null;
     let currentViewType = null;
     let searchTimeout = null;
+    let selectedFiles = [];
+    let unreadCounts = {};
+    const socket = io();
 
     /* проверка авторизации */
     async function checkAuth() {
@@ -15,8 +18,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
             currentUser = await res.json();
+            socket.emit('register', currentUser.id);
             loadProfile();
             checkNotifications();
+            loadUnreadCounts();
         } catch {
             window.location.href = '/login.html';
         }
@@ -24,7 +29,67 @@ document.addEventListener('DOMContentLoaded', () => {
 
     checkAuth();
 
-    /* проверка уведомлений */
+    /* получение уведомления о новом сообщении через websocket */
+    socket.on('new-message', (data) => {
+        loadUnreadCounts();
+
+        /* если чат с этой заявкой открыт - обновляем сообщения и отмечаем как прочитанные */
+        const chatModal = document.getElementById('modal-chat');
+        if (chatModal.classList.contains('active') && currentViewRequest && currentViewRequest.id === data.request_id) {
+            loadMessages(data.request_id);
+            markAsRead(data.request_id);
+        }
+    });
+
+    /* загрузка количества непрочитанных сообщений */
+    async function loadUnreadCounts() {
+        try {
+            const res = await fetch('/api/unread-counts');
+            const list = await res.json();
+            unreadCounts = {};
+            list.forEach(item => {
+                unreadCounts[item.request_id] = item.unread_count;
+            });
+            updateUnreadBadges();
+        } catch (err) {
+            console.error('ошибка загрузки непрочитанных:', err);
+        }
+    }
+
+    /* обновление бейджей непрочитанных на заявках */
+    function updateUnreadBadges() {
+        document.querySelectorAll('.request-item').forEach(item => {
+            const id = parseInt(item.dataset.id);
+            const existingBadge = item.querySelector('.unread-badge');
+            if (existingBadge) existingBadge.remove();
+
+            if (unreadCounts[id] && unreadCounts[id] > 0) {
+                const badge = document.createElement('span');
+                badge.className = 'unread-badge';
+                badge.textContent = unreadCounts[id];
+                item.querySelector('.request-right').appendChild(badge);
+            }
+        });
+    }
+
+    /* отметить как прочитанное */
+    async function markAsRead(requestId) {
+        try {
+            await fetch('/api/comments/read', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ request_id: requestId })
+            });
+            if (unreadCounts[requestId]) {
+                delete unreadCounts[requestId];
+                updateUnreadBadges();
+            }
+        } catch (err) {
+            console.error('ошибка отметки прочитанного:', err);
+        }
+    }
+
+    /* проверка уведомлений о необработанных заявках */
     async function checkNotifications() {
         try {
             const res = await fetch('/api/requests/assigned?filter=0');
@@ -136,19 +201,35 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    /* отображение выбранных файлов */
+    /* управление выбранными файлами */
     const fileInput = document.getElementById('req-files');
     const selectedFilesDiv = document.getElementById('selected-files');
 
     fileInput.addEventListener('change', () => {
-        selectedFilesDiv.innerHTML = '';
         for (const file of fileInput.files) {
+            selectedFiles.push(file);
+        }
+        fileInput.value = '';
+        renderSelectedFiles();
+    });
+
+    function renderSelectedFiles() {
+        selectedFilesDiv.innerHTML = '';
+        selectedFiles.forEach((file, index) => {
             const div = document.createElement('div');
             div.className = 'selected-file';
-            div.textContent = file.name;
+            div.innerHTML = `<span>${esc(file.name)}</span><span class="file-remove" data-index="${index}">✕</span>`;
             selectedFilesDiv.appendChild(div);
-        }
-    });
+        });
+
+        selectedFilesDiv.querySelectorAll('.file-remove').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                selectedFiles.splice(parseInt(btn.dataset.index), 1);
+                renderSelectedFiles();
+            });
+        });
+    }
 
     /* открытие модалки создания заявки */
     document.getElementById('btn-open-create-modal').addEventListener('click', async () => {
@@ -177,8 +258,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         document.getElementById('req-title').value = '';
         document.getElementById('req-description').value = '';
-        fileInput.value = '';
+        selectedFiles = [];
         selectedFilesDiv.innerHTML = '';
+        fileInput.value = '';
         deadlineType.value = 'd';
         fillDeadlineValues('d');
 
@@ -203,7 +285,7 @@ document.addEventListener('DOMContentLoaded', () => {
         formData.append('deadline_value', dvalue);
         formData.append('assignee_id', assignee_id);
 
-        for (const file of fileInput.files) {
+        for (const file of selectedFiles) {
             formData.append('files', file);
         }
 
@@ -251,9 +333,11 @@ document.addEventListener('DOMContentLoaded', () => {
                         <span class="request-sep">—</span>
                         <span class="request-title-text">${esc(r.title)}</span>
                     </div>
-                    <span class="request-status ${r.status === 1 ? 'status-closed' : 'status-open'}">
-                        ${r.status === 1 ? 'Закрыта' : 'Не закрыта'}
-                    </span>
+                    <div class="request-right">
+                        <span class="request-status ${r.status === 1 ? 'status-closed' : 'status-open'}">
+                            ${r.status === 1 ? 'Закрыта' : 'Не закрыта'}
+                        </span>
+                    </div>
                 </div>
             `).join('');
 
@@ -263,6 +347,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     showDetail(req, 'created');
                 });
             });
+
+            updateUnreadBadges();
         } catch (err) {
             console.error('ошибка загрузки созданных заявок:', err);
         }
@@ -294,9 +380,11 @@ document.addEventListener('DOMContentLoaded', () => {
                         <span class="request-sep">—</span>
                         <span class="request-title-text">${esc(r.title)}</span>
                     </div>
-                    <span class="request-status ${r.status === 1 ? 'status-closed' : 'status-open'}">
-                        ${r.status === 1 ? 'Закрыта' : 'Не закрыта'}
-                    </span>
+                    <div class="request-right">
+                        <span class="request-status ${r.status === 1 ? 'status-closed' : 'status-open'}">
+                            ${r.status === 1 ? 'Закрыта' : 'Не закрыта'}
+                        </span>
+                    </div>
                 </div>
             `).join('');
 
@@ -306,6 +394,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     showDetail(req, 'assigned');
                 });
             });
+
+            updateUnreadBadges();
         } catch (err) {
             console.error('ошибка загрузки назначенных заявок:', err);
         }
@@ -320,25 +410,11 @@ document.addEventListener('DOMContentLoaded', () => {
     function getFileIcon(filename) {
         const ext = filename.split('.').pop().toLowerCase();
         const icons = {
-            'pdf': '📕',
-            'doc': '📘',
-            'docx': '📘',
-            'xls': '📗',
-            'xlsx': '📗',
-            'ppt': '📙',
-            'pptx': '📙',
-            'txt': '📄',
-            'jpg': '🖼️',
-            'jpeg': '🖼️',
-            'png': '🖼️',
-            'gif': '🖼️',
-            'zip': '📦',
-            'rar': '📦',
-            '7z': '📦',
-            'mp3': '🎵',
-            'mp4': '🎬',
-            'avi': '🎬',
-            'mkv': '🎬'
+            'pdf': '📕', 'doc': '📘', 'docx': '📘',
+            'xls': '📗', 'xlsx': '📗', 'ppt': '📙', 'pptx': '📙',
+            'txt': '📄', 'jpg': '🖼️', 'jpeg': '🖼️', 'png': '🖼️', 'gif': '🖼️',
+            'zip': '📦', 'rar': '📦', '7z': '📦',
+            'mp3': '🎵', 'mp4': '🎬', 'avi': '🎬', 'mkv': '🎬'
         };
         return icons[ext] || '📎';
     }
@@ -364,7 +440,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const userLabel = type === 'created' ? 'Адресат' : 'Создатель';
         const userName = type === 'created' ? req.assignee_name : req.creator_name;
 
-        /* загружаем файлы */
         let attachmentsHtml = '';
         try {
             const res = await fetch(`/api/attachments/${req.id}`);
@@ -479,7 +554,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        /* кнопка обсуждение */
         document.getElementById('btn-discussion').addEventListener('click', () => {
             closeModal('modal-view');
             openChat(req, type);
@@ -494,6 +568,7 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('chat-title').textContent = `Обсуждение с ${companionName}`;
         document.getElementById('chat-input').value = '';
 
+        await markAsRead(req.id);
         await loadMessages(req.id);
         openModal('modal-chat');
 
@@ -548,6 +623,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (data.success) {
                 input.value = '';
                 await loadMessages(currentViewRequest.id);
+                await markAsRead(currentViewRequest.id);
             } else {
                 alert(data.error);
             }

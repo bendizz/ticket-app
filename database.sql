@@ -37,3 +37,10 @@ CREATE TABLE IF NOT EXISTS comments (
     text TEXT NOT NULL,
     created_at TIMESTAMP DEFAULT NOW()
 );
+
+CREATE TABLE IF NOT EXISTS comment_reads (
+    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    request_id INTEGER REFERENCES requests(id) ON DELETE CASCADE,
+    last_read_at TIMESTAMP DEFAULT NOW(),
+    PRIMARY KEY (user_id, request_id)
+);

@@ -4,8 +4,12 @@ const { Pool } = require('pg');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const http = require('http');
+const { Server } = require('socket.io');
 
 const app = express();
+const server = http.createServer(app);
+const io = new Server(server);
 const PORT = 3000;
 
 /* подключение к бд */
@@ -50,6 +54,25 @@ function requireAuth(req, res, next) {
     if (req.session && req.session.userId) return next();
     res.status(401).json({ error: 'Не авторизован' });
 }
+
+/* хранение связи userId -> socketId */
+const userSockets = {};
+
+io.on('connection', (socket) => {
+    /* клиент регистрирует свой userId */
+    socket.on('register', (userId) => {
+        userSockets[userId] = socket.id;
+    });
+
+    socket.on('disconnect', () => {
+        for (const [userId, socketId] of Object.entries(userSockets)) {
+            if (socketId === socket.id) {
+                delete userSockets[userId];
+                break;
+            }
+        }
+    });
+});
 
 /* корневой маршрут */
 app.get('/', (req, res) => {
@@ -193,7 +216,6 @@ app.post('/api/requests', requireAuth, upload.array('files', 10), async (req, re
 
         const requestId = result.rows[0].id;
 
-        /* сохранение файлов в бд */
         if (req.files && req.files.length > 0) {
             for (const file of req.files) {
                 await pool.query(
@@ -277,10 +299,9 @@ app.get('/api/requests/assigned', requireAuth, async (req, res) => {
     }
 });
 
-/* удалить заявку (только создатель) */
+/* удалить заявку */
 app.delete('/api/requests/:id', requireAuth, async (req, res) => {
     try {
-        /* получаем файлы заявки для удаления */
         const files = await pool.query(
             'SELECT file_path FROM attachments WHERE request_id = $1',
             [req.params.id]
@@ -293,7 +314,6 @@ app.delete('/api/requests/:id', requireAuth, async (req, res) => {
 
         if (result.rows.length === 0) return res.status(404).json({ error: 'Заявка не найдена' });
 
-        /* удаляем файлы с диска */
         for (const file of files.rows) {
             const filePath = path.join(uploadsDir, file.file_path);
             if (fs.existsSync(filePath)) {
@@ -308,7 +328,7 @@ app.delete('/api/requests/:id', requireAuth, async (req, res) => {
     }
 });
 
-/* закрыть заявку (только адресат) */
+/* закрыть заявку */
 app.patch('/api/requests/:id/close', requireAuth, async (req, res) => {
     try {
         const check = await pool.query(
@@ -331,7 +351,6 @@ app.patch('/api/requests/:id/close', requireAuth, async (req, res) => {
 /* получить файлы заявки */
 app.get('/api/attachments/:requestId', requireAuth, async (req, res) => {
     try {
-        /* проверяем что пользователь имеет доступ к заявке */
         const access = await pool.query(
             'SELECT id FROM requests WHERE id = $1 AND (creator_id = $2 OR assignee_id = $2)',
             [req.params.requestId, req.session.userId]
@@ -368,7 +387,6 @@ app.get('/api/download/:id', requireAuth, async (req, res) => {
 
         const f = file.rows[0];
 
-        /* проверяем доступ */
         if (f.creator_id !== req.session.userId && f.assignee_id !== req.session.userId) {
             return res.status(403).json({ error: 'Нет доступа' });
         }
@@ -388,7 +406,6 @@ app.get('/api/download/:id', requireAuth, async (req, res) => {
 /* получить комментарии заявки */
 app.get('/api/comments/:requestId', requireAuth, async (req, res) => {
     try {
-        /* проверяем что пользователь имеет доступ к заявке */
         const access = await pool.query(
             'SELECT id FROM requests WHERE id = $1 AND (creator_id = $2 OR assignee_id = $2)',
             [req.params.requestId, req.session.userId]
@@ -421,9 +438,8 @@ app.post('/api/comments', requireAuth, async (req, res) => {
             return res.status(400).json({ error: 'Введите текст сообщения' });
         }
 
-        /* проверяем что пользователь имеет доступ к заявке */
         const access = await pool.query(
-            'SELECT id FROM requests WHERE id = $1 AND (creator_id = $2 OR assignee_id = $2)',
+            'SELECT creator_id, assignee_id FROM requests WHERE id = $1 AND (creator_id = $2 OR assignee_id = $2)',
             [request_id, req.session.userId]
         );
         if (access.rows.length === 0) {
@@ -435,6 +451,16 @@ app.post('/api/comments', requireAuth, async (req, res) => {
             [request_id, req.session.userId, text.trim()]
         );
 
+        /* отправляем уведомление собеседнику через websocket */
+        const r = access.rows[0];
+        const recipientId = r.creator_id === req.session.userId ? r.assignee_id : r.creator_id;
+
+        if (userSockets[recipientId]) {
+            io.to(userSockets[recipientId]).emit('new-message', {
+                request_id: request_id
+            });
+        }
+
         res.json({ success: true });
     } catch (err) {
         console.error(err);
@@ -442,7 +468,45 @@ app.post('/api/comments', requireAuth, async (req, res) => {
     }
 });
 
+/* отметить сообщения как прочитанные */
+app.post('/api/comments/read', requireAuth, async (req, res) => {
+    try {
+        const { request_id } = req.body;
+        await pool.query(
+            `INSERT INTO comment_reads (user_id, request_id, last_read_at)
+             VALUES ($1, $2, NOW())
+             ON CONFLICT (user_id, request_id)
+             DO UPDATE SET last_read_at = NOW()`,
+            [req.session.userId, request_id]
+        );
+        res.json({ success: true });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Ошибка сервера' });
+    }
+});
+
+/* получить количество непрочитанных сообщений по заявкам */
+app.get('/api/unread-counts', requireAuth, async (req, res) => {
+    try {
+        const result = await pool.query(`
+            SELECT c.request_id, COUNT(*)::int AS unread_count
+            FROM comments c
+            JOIN requests r ON c.request_id = r.id
+            LEFT JOIN comment_reads cr ON cr.request_id = c.request_id AND cr.user_id = $1
+            WHERE (r.creator_id = $1 OR r.assignee_id = $1)
+              AND c.user_id != $1
+              AND (cr.last_read_at IS NULL OR c.created_at > cr.last_read_at)
+            GROUP BY c.request_id
+        `, [req.session.userId]);
+        res.json(result.rows);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Ошибка сервера' });
+    }
+});
+
 /* запуск сервера */
-app.listen(PORT, () => {
+server.listen(PORT, () => {
     console.log(`Сервер запущен: http://localhost:${PORT}`);
 });
