@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Панель управления</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="dashboard-body">
+
+    <!-- боковая панель -->
+    <nav class="sidebar" id="sidebar">
+        <div class="sidebar-btn active" id="butt1" data-page="page-profile">
+            <span class="btn-icon">👤</span>
+            <span class="btn-text">Личный кабинет</span>
+        </div>
+        <div class="sidebar-btn" id="butt2" data-page="page-create">
+            <span class="btn-icon">✏️</span>
+            <span class="btn-text">Создание заявок</span>
+        </div>
+        <div class="sidebar-btn" id="butt3" data-page="page-process">
+            <span class="btn-icon">
+                📋
+                <span class="notif-dot" id="notif-dot"></span>
+            </span>
+            <span class="btn-text">Обработка заявок</span>
+        </div>
+        <div class="sidebar-spacer"></div>
+        <div class="sidebar-btn" id="butt4">
+            <span class="btn-icon">🚪</span>
+            <span class="btn-text">Выход</span>
+        </div>
+    </nav>
+
+    <!-- основной контент -->
+    <main class="content">
+
+        <!-- личный кабинет -->
+        <section class="page active" id="page-profile">
+            <h2 class="page-title">Личный кабинет</h2>
+
+            <div class="card">
+                <h3>Информация о пользователе</h3>
+                <div class="info-row">
+                    <span class="info-label">Логин:</span>
+                    <span class="info-value" id="profile-username"></span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Пароль:</span>
+                    <span class="info-value" id="profile-password"></span>
+                    <button class="btn-toggle-pwd" id="toggle-password" title="Показать / скрыть">👁</button>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>Мои созданные заявки</h3>
+                <div class="stats-grid">
+                    <div class="stat-item">
+                        <span class="stat-number stat-blue" id="stat-created">0</span>
+                        <span class="stat-label">Созданные</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-number stat-green" id="stat-created-closed">0</span>
+                        <span class="stat-label">Обработанные</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-number stat-red" id="stat-created-open">0</span>
+                        <span class="stat-label">Не обработанные</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>Назначенные мне заявки</h3>
+                <div class="stats-grid">
+                    <div class="stat-item">
+                        <span class="stat-number stat-green" id="stat-assigned-closed">0</span>
+                        <span class="stat-label">Обработанные</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-number stat-red" id="stat-assigned-open">0</span>
+                        <span class="stat-label">Не обработанные</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- создание заявок -->
+        <section class="page" id="page-create">
+            <h2 class="page-title">Создание заявок</h2>
+
+            <div class="toolbar">
+                <button class="btn-green" id="btn-open-create-modal">Создать заявку</button>
+                <select class="filter-select" id="filter-created">
+                    <option value="all">Все заявки</option>
+                    <option value="0">Не закрытые</option>
+                    <option value="1">Закрытые</option>
+                </select>
+                <input type="text" class="search-input" id="search-created" placeholder="Поиск по заявкам...">
+            </div>
+
+            <div class="request-list" id="created-list">
+                <p class="empty-message">Заявок нет</p>
+            </div>
+        </section>
+
+        <!-- обработка заявок -->
+        <section class="page" id="page-process">
+            <h2 class="page-title">Обработка заявок</h2>
+
+            <div class="toolbar">
+                <select class="filter-select" id="filter-assigned">
+                    <option value="all">Все заявки</option>
+                    <option value="0">Не закрытые</option>
+                    <option value="1">Закрытые</option>
+                </select>
+                <input type="text" class="search-input" id="search-assigned" placeholder="Поиск по заявкам...">
+            </div>
+
+            <div class="request-list" id="assigned-list">
+                <p class="empty-message">Заявок нет</p>
+            </div>
+        </section>
+    </main>
+
+    <!-- модалка создания заявки -->
+    <div class="modal-overlay" id="modal-create">
+        <div class="modal">
+            <div class="modal-header">
+                <h3>Новая заявка</h3>
+                <span class="modal-close" data-modal="modal-create">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Название заявки</label>
+                    <input type="text" id="req-title" placeholder="Введите название">
+                </div>
+                <div class="form-group">
+                    <label>Описание заявки</label>
+                    <textarea id="req-description" rows="4" placeholder="Введите описание"></textarea>
+                </div>
+                <div class="form-group">
+                    <label>Срок выполнения</label>
+                    <div class="deadline-row">
+                        <select id="req-deadline-type">
+                            <option value="d">Дни</option>
+                            <option value="h">Часы</option>
+                        </select>
+                        <select id="req-deadline-value"></select>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Адресат</label>
+                    <select id="req-assignee"></select>
+                </div>
+                <div class="form-group">
+                    <label>Прикрепить файлы</label>
+                    <input type="file" id="req-files" multiple class="file-input">
+                    <div class="selected-files" id="selected-files"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-green" id="btn-submit-request">Создать</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- модалка просмотра заявки -->
+    <div class="modal-overlay" id="modal-view">
+        <div class="modal">
+            <div class="modal-header">
+                <h3>Информация о заявке</h3>
+                <span class="modal-close" data-modal="modal-view">&times;</span>
+            </div>
+            <div class="modal-body" id="modal-view-body"></div>
+            <div class="modal-footer" id="modal-view-footer"></div>
+        </div>
+    </div>
+
+    <!-- модалка чата -->
+    <div class="modal-overlay" id="modal-chat">
+        <div class="modal modal-chat">
+            <div class="modal-header">
+                <h3 id="chat-title">Обсуждение</h3>
+                <div class="chat-header-buttons">
+                    <button class="btn-blue btn-small" id="btn-chat-back">Назад</button>
+                    <button class="btn-red btn-small" id="btn-chat-close">Закрыть</button>
+                </div>
+            </div>
+            <div class="chat-messages" id="chat-messages"></div>
+            <div class="chat-input-area">
+                <input type="text" class="chat-input" id="chat-input" placeholder="Введите сообщение...">
+                <button class="btn-brown btn-send" id="btn-send-message">Отправить</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/js/app.js"></script>
+</body>
+</html>
